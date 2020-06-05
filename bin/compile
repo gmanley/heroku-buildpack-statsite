@@ -45,7 +45,6 @@ if [ "${STATSITE_REBUILD:-false}" = "true" ]; then
 fi
 
 BUILD_TARGET_DIR="${BUILD_DIR}/statsite"
-mkdir -p "${BUILD_TARGET_DIR}"
 
 # This is the path that will be used at dyno runtime, and in which we build.
 APP_TARGET_DIR="/app/statsite"
