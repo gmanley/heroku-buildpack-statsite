@@ -104,6 +104,8 @@ build_and_install_statsite() {
 
   cd "${BUILD_DIR}/statsite"
 
+  ./autogen.sh
+
   ./configure --prefix="$APP_TARGET_DIR"
 
   make && make install
