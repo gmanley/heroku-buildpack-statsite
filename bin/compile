@@ -1,0 +1,142 @@
+#!/bin/bash
+#
+# Usage:
+#  bin/compile BUILD_DIR CACHE_DIR ENV_DIR
+# Example
+#   BUILD_DIR is /tmp/build_5b72bfcaef1adfe4bb7a9e34d80201fc
+#   CACHE_DIR is  app
+#  The contents of CACHE_DIR will be persisted between builds.
+
+set -e
+
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=${3}
+
+unset GIT_DIR
+
+logstamp() { printf "[%s]" "$(TZ='America/Chicago' date +'%Y-%m-%d %H:%M:%S')" ; }
+topic()    { echo "-----> $(logstamp) $*" ; }
+info()    { echo "       $*" ; }
+indent()  { sed -u 's/^/       /' ; }
+
+BUILDPACK_DIR=$(cd "$(dirname "$0")"; cd ..; pwd)
+
+APT_DIR="$CACHE_DIR/.apt"
+APT_CACHE_DIR="$CACHE_DIR/apt/cache"
+APT_STATE_DIR="$CACHE_DIR/apt/state"
+APT_OPTIONS="-o debug::nolocking=true -o dir::cache=$APT_CACHE_DIR -o dir::state=$APT_STATE_DIR"
+
+mkdir -p "$APT_DIR"
+mkdir -p "$APT_CACHE_DIR/archives/partial"
+mkdir -p "$APT_STATE_DIR/lists/partial"
+
+load_env_vars() {
+  local env_var; env_var="${1:-}"
+  until [ -z "$env_var" ]; do [ -f "$ENV_DIR/$env_var" ] && export "$env_var=$(cat "$ENV_DIR/$env_var")"; shift ; env_var="${1:-}" ; done
+}
+load_env_vars "STATSITE_VERSION" "STATSITE_REBUILD"
+
+STATSITE_VERSION="${STATSITE_VERSION:-master}"
+
+CACHED_TAR="${CACHE_DIR}/statsite-${STATSITE_VERSION}-heroku.tar.bz2"
+if [ "${STATSITE_REBUILD:-false}" = "true" ]; then
+  rm -f "$CACHED_TAR"
+fi
+
+BUILD_TARGET_DIR="${BUILD_DIR}/statsite"
+mkdir -p "${BUILD_TARGET_DIR}"
+
+# This is the path that will be used at dyno runtime, and in which we build.
+APP_TARGET_DIR="/app/statsite"
+mkdir -p "${APP_TARGET_DIR}"
+
+install_deps() {
+  # Install dependencies
+  topic "Updating apt caches for dependencies"
+  apt-get $APT_OPTIONS update | indent
+
+  topic "Installing dependencies"
+  DEPS="build-essential libtool autoconf automake scons python-setuptools lsof git texlive check"
+  apt-get $APT_OPTIONS -y --force-yes -d install --reinstall $DEPS | indent
+}
+
+configure_app_env_vars() {
+  topic "Creating .profile.d entry"
+  mkdir -p "${BUILD_DIR}/.profile.d"
+
+  # These exports must point to /app, because the profile is
+  # executed in a running dyno, not the buildpack environment
+  cat <<EOF > "${BUILD_DIR}/.profile.d/statsite.sh"
+  export PATH="${APP_TARGET_DIR}/bin:$PATH"
+EOF
+ chmod +x "${BUILD_DIR}/.profile.d/statsite.sh"
+ echo "configured APP env vars:" | indent
+ indent < "${BUILD_DIR}/.profile.d/statsite.sh"
+ . "${BUILD_DIR}/.profile.d/statsite.sh"
+}
+
+configure_buildpack_env_vars() {
+  # These exports point to the build directory, not to /app, so that
+  # they work for later buildpacks.
+  export PATH="${BUILD_TARGET_DIR}/bin:$PATH"
+  export LD_LIBRARY_PATH="${BUILD_TARGET_DIR}/lib:${LD_LIBRARY_PATH:-/usr/local/lib}"
+  export LD_RUN_PATH="${BUILD_TARGET_DIR}/lib:${LD_RUN_PATH:-/usr/local/lib}"
+  export LIBRARY_PATH="${BUILD_TARGET_DIR}/lib:${LIBRARY_PATH:-/usr/local/lib}"
+  export SYBASE="${APP_TARGET_DIR}"
+  # give environment to later buildpacks
+  export | grep -E -e ' (PATH|LD_LIBRARY_PATH|LIBRARY_PATH|SYBASE)=' > "${BUILDPACK_DIR}/export"
+
+  echo "configured BUILDPACK env vars:" | indent
+  indent < "${BUILDPACK_DIR}/export"
+}
+
+download_and_extract_statsite_archive() {
+  STATSITE_URL="https://github.com/statsite/statsite.git"
+  git clone "$STATSITE_URL" "$BUILD_DIR"
+  pushd "$BUILD_DIR"
+  git reset --hard "$STATSITE_VERSION"
+  popd
+}
+
+build_and_install_statsite() {
+  topic "Building StatSite"
+
+  cd "${BUILD_DIR}/statsite"
+
+  ./configure --prefix="$APP_TARGET_DIR"
+
+  make && make install
+
+  rm -rf "${BUILD_DIR}/statsite"
+}
+
+cache_build_artifacts_for_future_deploys() {
+  topic "Caching StatSite installation"
+  pushd "$APP_TARGET_DIR"
+  tar cjf "${CACHED_TAR}" . | indent
+  popd
+}
+
+topic "StatSite ${STATSITE_VERSION} building in ${BUILD_DIR}"
+
+configure_app_env_vars
+
+if [ ! -f "$CACHED_TAR" ]; then
+  info "Cached files not found - downloading and unpacking..."
+  download_and_extract_statsite_archive
+
+  build_and_install_statsite
+
+  topic "Testing build"
+  "$APP_TARGET_DIR/bin/statsite"
+
+  cache_build_artifacts_for_future_deploys
+fi
+
+info "Unpacking cached files..."
+tar xjf "${CACHED_TAR}" -C "${APP_TARGET_DIR}" | indent
+
+configure_buildpack_env_vars
+
+info "Install of StatSite ${STATSITE_VERSION} complete"
