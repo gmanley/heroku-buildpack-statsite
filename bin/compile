@@ -64,7 +64,7 @@ install_deps() {
 
   echo "deb https://packagecloud.io/raintank/raintank/ubuntu/ trusty main" >> $APT_SOURCES
   echo "deb-src https://packagecloud.io/raintank/raintank/ubuntu/ trusty main" >> $APT_SOURCES
-  curl -L https://packagecloud.io/raintank/raintank/gpgkey | sudo apt-key add -
+  curl -L https://packagecloud.io/raintank/raintank/gpgkey | apt-key add -
 
   # Install dependencies
   topic "Updating apt caches for dependencies"
