@@ -106,13 +106,12 @@ configure_buildpack_env_vars() {
 download_and_extract_statsite_archive() {
   STATSITE_URL="https://github.com/statsite/statsite.git"
 
-  if [ -f "${BUILD_DIR}/.git/config" ]; then
-    pushd "$BUILD_DIR"
+  if [ -f "${BUILD_DIR}/statsite/.git/config" ]; then
+    pushd "$BUILD_DIR/statsite"
     git fetch --all
   else
-    rm -rf "$BUILD_DIR"
-    git clone "$STATSITE_URL" "$BUILD_DIR"
-    pushd "$BUILD_DIR"
+    git clone "$STATSITE_URL" "$BUILD_DIR/statsite"
+    pushd "$BUILD_DIR/statsite"
   fi
 
   git reset --hard "$STATSITE_VERSION"
