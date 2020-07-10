@@ -110,6 +110,7 @@ download_and_extract_statsite_archive() {
     pushd "$BUILD_DIR"
     git fetch --all
   else
+    rm -rf "$BUILD_DIR"
     git clone "$STATSITE_URL" "$BUILD_DIR"
     pushd "$BUILD_DIR"
   fi
