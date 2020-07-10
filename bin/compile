@@ -125,7 +125,8 @@ build_and_install_statsite() {
 
   ./autogen.sh
 
-  ./configure --prefix="$APP_TARGET_DIR"
+  mkdir -p "$APP_TARGET_DIR/etc"
+  ./configure --prefix="$APP_TARGET_DIR" --sysconfdir "$APP_TARGET_DIR/etc"
 
   make && make install
 
@@ -242,7 +243,7 @@ if [ ! -f "$CACHED_TAR" ]; then
   build_and_install_statsite
 
   topic "Testing build"
-  "$APP_TARGET_DIR/bin/statsite"
+  # "$APP_TARGET_DIR/bin/statsite"
 
   cache_build_artifacts_for_future_deploys
 fi
