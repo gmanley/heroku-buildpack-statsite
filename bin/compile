@@ -128,7 +128,10 @@ build_and_install_statsite() {
   mkdir -p "$APP_TARGET_DIR/etc"
   ./configure --prefix="$APP_TARGET_DIR" --sysconfdir "$APP_TARGET_DIR/etc"
 
-  make && make install
+  make -j2
+
+  cp -r "${BUILD_DIR}/bin" "${APP_TARGET_DIR}"
+  cp -r "${BUILD_DIR}/lib" "${APP_TARGET_DIR}"
 
   rm -rf "${BUILD_DIR}/statsite"
 }
