@@ -126,12 +126,13 @@ build_and_install_statsite() {
   ./autogen.sh
 
   mkdir -p "$APP_TARGET_DIR/etc"
-  ./configure --prefix="$APP_TARGET_DIR" --sysconfdir "$APP_TARGET_DIR/etc"
+  ./configure --prefix="$APP_TARGET_DIR"
 
   make -j2
 
-  cp -r "${BUILD_DIR}/bin" "${APP_TARGET_DIR}"
-  cp -r "${BUILD_DIR}/lib" "${APP_TARGET_DIR}"
+  mkdir -p "${APP_TARGET_DIR}/bin"
+  cp -r "${BUILD_DIR}/statsite" "${APP_TARGET_DIR}/bin"
+  cp -r "${BUILD_DIR}/sinks" "${APP_TARGET_DIR}/bin"
 }
 
 configure_carbon_relay() {
@@ -244,7 +245,7 @@ if [ ! -f "$CACHED_TAR" ]; then
   build_and_install_statsite
 
   topic "Testing build"
-  # "$APP_TARGET_DIR/bin/statsite"
+  "$APP_TARGET_DIR/bin/statsite -v"
 
   cache_build_artifacts_for_future_deploys
 fi
