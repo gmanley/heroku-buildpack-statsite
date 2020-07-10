@@ -131,8 +131,8 @@ build_and_install_statsite() {
   make -j2
 
   mkdir -p "${APP_TARGET_DIR}/bin"
-  cp -r "${BUILD_DIR}/statsite" "${APP_TARGET_DIR}/bin"
-  cp -r "${BUILD_DIR}/sinks" "${APP_TARGET_DIR}/bin"
+  cp "${BUILD_DIR}/statsite/statsite" "${APP_TARGET_DIR}/bin/statsite"
+  cp -r "${BUILD_DIR}/statsite/sinks" "${APP_TARGET_DIR}/sinks"
 }
 
 configure_carbon_relay() {
