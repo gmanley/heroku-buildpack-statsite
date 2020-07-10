@@ -132,8 +132,6 @@ build_and_install_statsite() {
 
   cp -r "${BUILD_DIR}/bin" "${APP_TARGET_DIR}"
   cp -r "${BUILD_DIR}/lib" "${APP_TARGET_DIR}"
-
-  rm -rf "${BUILD_DIR}/statsite"
 }
 
 configure_carbon_relay() {
