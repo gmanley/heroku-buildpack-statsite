@@ -244,6 +244,12 @@ if [ ! -f "$CACHED_TAR" ]; then
 
   build_and_install_statsite
 
+  echo $APP_TARGET_DIR
+  ls -laR $APP_TARGET_DIR
+
+  echo $BUILD_DIR
+  ls -laR $BUILD_DIR
+
   topic "Testing build"
   "$APP_TARGET_DIR/bin/statsite -v"
 
