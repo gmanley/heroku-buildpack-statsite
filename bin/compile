@@ -111,7 +111,7 @@ build_and_install_statsite() {
   make -j2
 
   mkdir -p "$STATSITE_INSTALL_DIR/bin"
-  mkdir -p "$STATSITE_INSTALL_DIR"
+  mkdir -p "$STATSITE_INSTALL_DIR/etc"
 
   cp "$STATSITE_SOURCE_DIR/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
   cp -r "$STATSITE_SOURCE_DIR/sinks" "$STATSITE_INSTALL_DIR/sinks"
