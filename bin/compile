@@ -69,6 +69,39 @@ install_deps() {
   topic "Installing dependencies"
   DEPS="build-essential libtool autoconf automake scons python-setuptools lsof git texlive check curl gnupg apt-transport-https carbon-relay-ng"
   apt-get $APT_OPTIONS -y --force-yes -d install --reinstall $DEPS | indent
+
+  mkdir -p $BUILD_DIR/.apt
+
+  for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
+    topic "Installing $(basename $DEB)"
+    dpkg -x $DEB $BUILD_DIR/.apt/
+  done
+
+  topic "Writing profile script"
+  mkdir -p $BUILD_DIR/.profile.d
+  cat <<EOF >$BUILD_DIR/.profile.d/000_apt.sh
+  export PATH="\$HOME/.apt/usr/bin:\$PATH"
+  export LD_LIBRARY_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu:\$HOME/.apt/usr/lib/i386-linux-gnu:\$HOME/.apt/usr/lib:\$LD_LIBRARY_PATH"
+  export LIBRARY_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu:\$HOME/.apt/usr/lib/i386-linux-gnu:\$HOME/.apt/usr/lib:\$LIBRARY_PATH"
+  export INCLUDE_PATH="\$HOME/.apt/usr/include:\$HOME/.apt/usr/include/x86_64-linux-gnu:\$INCLUDE_PATH"
+  export CPATH="\$INCLUDE_PATH"
+  export CPPPATH="\$INCLUDE_PATH"
+  export PKG_CONFIG_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/i386-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/pkgconfig:\$PKG_CONFIG_PATH"
+EOF
+
+  export PATH="$BUILD_DIR/.apt/usr/bin:$PATH"
+  export LD_LIBRARY_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.apt/usr/lib:$LD_LIBRARY_PATH"
+  export LIBRARY_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.apt/usr/lib:$LIBRARY_PATH"
+  export INCLUDE_PATH="$BUILD_DIR/.apt/usr/include:$BUILD_DIR/.apt/usr/include/x86_64-linux-gnu:$INCLUDE_PATH"
+  export CPATH="$INCLUDE_PATH"
+  export CPPPATH="$INCLUDE_PATH"
+  export PKG_CONFIG_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu/pkgconfig:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu/pkgconfig:$BUILD_DIR/.apt/usr/lib/pkgconfig:$PKG_CONFIG_PATH"
+
+  #give environment to later buildpacks
+  export | grep -E -e ' (PATH|LD_LIBRARY_PATH|LIBRARY_PATH|INCLUDE_PATH|CPATH|CPPPATH|PKG_CONFIG_PATH)='  > "$LP_DIR/export"
+
+  topic "Rewrite package-config files"
+  find $BUILD_DIR/.apt -type f -ipath '*/pkgconfig/*.pc' | xargs --no-run-if-empty -n 1 sed -i -e 's!^prefix=\(.*\)$!prefix='"$BUILD_DIR"'/.apt\1!g'
 }
 
 configure_app_env_vars() {
@@ -163,7 +196,7 @@ configure_carbon_relay() {
   type = 'grafanaNet'
   addr = 'https://graphite-us-central1.grafana.net/metrics'
   apikey = '11771:$GRAFANA_API_KEY'
-  schemasFile = '/etc/carbon-relay-ng/storage-schemas.conf'
+  schemasFile = '/app/vendor/statsite/etc/storage-schemas.conf'
 
   ## Instrumentation ##
   [instrumentation]
@@ -174,6 +207,12 @@ configure_carbon_relay() {
   # (Also, the interval here must correspond to your setting in storage-schemas.conf if you use Grafana Cloud)
   graphite_addr = "localhost:2003"
   graphite_interval = 10000  # in ms
+EOF
+
+  cat <<EOF > "$STATSITE_INSTALL_DIR/etc/storage-schemas.conf"
+[default]
+  pattern = .*
+  retentions = 10s:1d
 EOF
 }
 
