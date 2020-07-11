@@ -11,7 +11,10 @@ set -e
 
 BUILD_DIR=$1
 CACHE_DIR=$2
-ENV_DIR=${3}
+ENV_DIR=$3
+VENDOR_DIR="$BUILD_DIR/vendor"
+STATSITE_SOURCE_DIR="$CACHE_DIR/source"
+STATSITE_INSTALL_DIR="$VENDOR_DIR/statsite"
 
 unset GIT_DIR
 
@@ -42,7 +45,7 @@ load_env_vars() {
   local env_var; env_var="${1:-}"
   until [ -z "$env_var" ]; do [ -f "$ENV_DIR/$env_var" ] && export "$env_var=$(cat "$ENV_DIR/$env_var")"; shift ; env_var="${1:-}" ; done
 }
-load_env_vars "STATSITE_VERSION" "STATSITE_REBUILD"
+load_env_vars "STATSITE_VERSION" "STATSITE_REBUILD" "GRAFANA_API_KEY"
 
 STATSITE_VERSION="${STATSITE_VERSION:-master}"
 
@@ -53,7 +56,6 @@ fi
 
 BUILD_TARGET_DIR="${BUILD_DIR}/statsite"
 
-# This is the path that will be used at dyno runtime, and in which we build.
 APP_TARGET_DIR="/app/statsite"
 mkdir -p "${APP_TARGET_DIR}"
 
@@ -76,10 +78,8 @@ configure_app_env_vars() {
   topic "Creating .profile.d entry"
   mkdir -p "${BUILD_DIR}/.profile.d"
 
-  # These exports must point to /app, because the profile is
-  # executed in a running dyno, not the buildpack environment
-  cat <<EOF > "${BUILD_DIR}/.profile.d/statsite.sh"
-  export PATH="${APP_TARGET_DIR}/bin:$PATH"
+  cat <<EOF > "$BUILD_DIR/.profile.d/statsite.sh"
+  export PATH="\$HOME/vendor/statsite/bin:\$PATH"
 EOF
  chmod +x "${BUILD_DIR}/.profile.d/statsite.sh"
  echo "configured APP env vars:" | indent
@@ -87,29 +87,15 @@ EOF
  . "${BUILD_DIR}/.profile.d/statsite.sh"
 }
 
-configure_buildpack_env_vars() {
-  # These exports point to the build directory, not to /app, so that
-  # they work for later buildpacks.
-  export PATH="${BUILD_TARGET_DIR}/bin:$PATH"
-  export LD_LIBRARY_PATH="${BUILD_TARGET_DIR}/lib:${LD_LIBRARY_PATH:-/usr/local/lib}"
-  export LD_RUN_PATH="${BUILD_TARGET_DIR}/lib:${LD_RUN_PATH:-/usr/local/lib}"
-  export LIBRARY_PATH="${BUILD_TARGET_DIR}/lib:${LIBRARY_PATH:-/usr/local/lib}"
-  export SYBASE="${APP_TARGET_DIR}"
-  # give environment to later buildpacks
-  export | grep -E -e ' (PATH|LD_LIBRARY_PATH|LIBRARY_PATH|SYBASE)=' > "${BUILDPACK_DIR}/export"
-
-  echo "configured BUILDPACK env vars:" | indent
-  indent < "${BUILDPACK_DIR}/export"
-}
-
 download_and_extract_statsite_archive() {
   STATSITE_URL="https://github.com/statsite/statsite.git"
 
-  if [ -f "${BUILD_DIR}/statsite/.git/config" ]; then
+  mkdir -p "$STATSITE_SOURCE_DIR"
+  if [ -f "$STATSITE_SOURCE_DIR/.git/config" ]; then
     pushd "$BUILD_DIR/statsite"
     git fetch --all
   else
-    git clone "$STATSITE_URL" "$BUILD_DIR/statsite"
+    git clone "$STATSITE_URL" "$STATSITE_SOURCE_DIR"
     pushd "$BUILD_DIR/statsite"
   fi
 
@@ -120,18 +106,17 @@ download_and_extract_statsite_archive() {
 build_and_install_statsite() {
   topic "Building StatSite"
 
-  cd "${BUILD_DIR}/statsite"
+
+  cd "$STATSITE_SOURCE_DIR"
 
   ./autogen.sh
-
-  mkdir -p "$APP_TARGET_DIR/etc"
-  ./configure --prefix="$APP_TARGET_DIR"
+  ./configure --prefix="$STATSITE_INSTALL_DIR"
 
   make -j2
 
-  mkdir -p "${APP_TARGET_DIR}/bin"
-  cp "${BUILD_DIR}/statsite/statsite" "${APP_TARGET_DIR}/bin/statsite"
-  cp -r "${BUILD_DIR}/statsite/sinks" "${APP_TARGET_DIR}/sinks"
+  mkdir -p "$STATSITE_INSTALL_DIR/bin"
+  cp "$BUILD_DIR/statsite/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
+  cp -r "$BUILD_DIR/statsite/sinks" "$STATSITE_INSTALL_DIR/sinks"
 }
 
 configure_carbon_relay() {
@@ -140,8 +125,8 @@ configure_carbon_relay() {
   # instance id's distinguish stats of multiple relays.
   # do not run multiple relays with the same instance id.
   # supported variables:
-  #  ${HOST} : hostname
-  instance = "${HOST}"
+  #  \${HOST} : hostname
+  instance = "\${HOST}"
 
   ## System ##
   # this setting can be used to override the default GOMAXPROCS logic
@@ -179,7 +164,7 @@ configure_carbon_relay() {
   key = 'grafanaNet'
   type = 'grafanaNet'
   addr = 'https://graphite-us-central1.grafana.net/metrics'
-  apikey = '11771:${GRAFANA_API_KEY}'
+  apikey = '11771:$GRAFANA_API_KEY'
   schemasFile = '/etc/carbon-relay-ng/storage-schemas.conf'
 
   ## Instrumentation ##
@@ -205,7 +190,7 @@ log_facility = local0
 flush_interval = 10
 timer_eps = 0.01
 set_eps = 0.02
-stream_cmd = python sinks/graphite.py localhost 2003 statsite
+stream_cmd = python $STATSITE_INSTALL_DIR/sinks/graphite.py localhost 2003 statsite
 
 [histogram_api]
 prefix=api
@@ -252,7 +237,5 @@ else
   info "Unpacking cached files..."
   tar xjf "${CACHED_TAR}" -C "${APP_TARGET_DIR}" | indent
 fi
-
-configure_buildpack_env_vars
 
 info "Install of StatSite ${STATSITE_VERSION} complete"
