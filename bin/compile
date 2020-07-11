@@ -54,10 +54,7 @@ if [ "${STATSITE_REBUILD:-false}" = "true" ]; then
   rm -f "$CACHED_TAR"
 fi
 
-BUILD_TARGET_DIR="${BUILD_DIR}/statsite"
-
-APP_TARGET_DIR="/app/statsite"
-mkdir -p "${APP_TARGET_DIR}"
+BUILD_TARGET_DIR="$BUILD_DIR/statsite"
 
 install_deps() {
   cat "/etc/apt/sources.list" > "$APT_SOURCES"
@@ -81,7 +78,7 @@ configure_app_env_vars() {
   cat <<EOF > "$BUILD_DIR/.profile.d/statsite.sh"
   export PATH="\$HOME/vendor/statsite/bin:\$PATH"
 EOF
- chmod +x "$BUILD_DIR}.profile.d/statsite.sh"
+ chmod +x "$BUILD_DIR/.profile.d/statsite.sh"
  echo "configured APP env vars:" | indent
  indent < "$BUILD_DIR/.profile.d/statsite.sh"
  . "$BUILD_DIR/.profile.d/statsite.sh"
