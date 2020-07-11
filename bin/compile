@@ -243,8 +243,9 @@ if [ ! -f "$CACHED_TAR" ]; then
 
   build_and_install_statsite
 
-  topic "Testing build"
-  statsite -v
+  # Need to find another way to test the build as statsite -v returns a non-zero error code
+  # topic "Testing build"
+  # statsite -v
 
   cache_build_artifacts_for_future_deploys
 else
