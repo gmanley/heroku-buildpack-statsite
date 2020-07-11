@@ -98,7 +98,7 @@ EOF
   export PKG_CONFIG_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu/pkgconfig:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu/pkgconfig:$BUILD_DIR/.apt/usr/lib/pkgconfig:$PKG_CONFIG_PATH"
 
   #give environment to later buildpacks
-  export | grep -E -e ' (PATH|LD_LIBRARY_PATH|LIBRARY_PATH|INCLUDE_PATH|CPATH|CPPPATH|PKG_CONFIG_PATH)='  > "$LP_DIR/export"
+  export | grep -E -e ' (PATH|LD_LIBRARY_PATH|LIBRARY_PATH|INCLUDE_PATH|CPATH|CPPPATH|PKG_CONFIG_PATH)='  > "$BUILDPACK_DIR/export"
 
   topic "Rewrite package-config files"
   find $BUILD_DIR/.apt -type f -ipath '*/pkgconfig/*.pc' | xargs --no-run-if-empty -n 1 sed -i -e 's!^prefix=\(.*\)$!prefix='"$BUILD_DIR"'/.apt\1!g'
@@ -266,7 +266,7 @@ if [ ! -f "$CACHED_TAR" ]; then
   configure_statsite
   configure_carbon_relay
 
-  # Need to find another way to test the build as statsite -v returns a non-zero error code
+  # Need to find another way to test the build as statsite -v returns a non-zero return code
   # topic "Testing build"
   # statsite -v
 
