@@ -216,8 +216,6 @@ install_deps
 
 topic "StatSite $STATSITE_VERSION building in $BUILD_DIR"
 
-configure_app_env_vars
-configure_carbon_relay
 configure_statsite
 
 if [ ! -f "$CACHED_TAR" ]; then
@@ -225,6 +223,8 @@ if [ ! -f "$CACHED_TAR" ]; then
   download_and_extract_statsite_archive
 
   build_and_install_statsite
+  configure_app_env_vars
+  configure_carbon_relay
 
   # Need to find another way to test the build as statsite -v returns a non-zero error code
   # topic "Testing build"
