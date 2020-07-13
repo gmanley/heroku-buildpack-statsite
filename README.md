@@ -3,7 +3,7 @@ heroku-buildpack-statsite
 
 A [Heroku buildpack](http://devcenter.heroku.com/articles/buildpacks) for compiling statsite.
 
-It's setup to use (GrafanaCloud)[https://grafana.com/products/cloud/].
+It's setup to use [GrafanaCloud](https://grafana.com/products/cloud/).
 
 You need to have `GRAFANA_API_KEY` for this to work.
 
