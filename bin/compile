@@ -253,9 +253,27 @@ if [ ! -f "$CACHED_TAR" ]; then
   configure_statsite
   configure_carbon_relay
 
-  # Need to find another way to test the build as statsite -v returns a non-zero return code
-  # topic "Testing build"
-  # statsite -v
+  topic 'Checking StatSite CLI'
+  version_output=$(statsite -v 2>&1)
+  if [[ ! $version_output  =~ "statsite version "[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    topic "StatStat version output didn't match expected format"
+    echo "Expected pattern: /statsite version [0-9]+\.[0-9]+\.[0-9]+/" | indent
+    echo "Output" | indent
+    echo $version_output
+    exit 1
+  fi
+  echo $version_output
+
+  topic 'Checking Carbon Relay NG CLI'
+  version_output=$(carbon-relay-ng version 2>&1)
+  if [[ ! $version_output  =~ "carbon-relay-ng "[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    topic "StatStat version output didn't match expcted format"
+    echo "expected regex format: /carbon-relay-ng version [0-9]+\.[0-9]+\.[0-9]+/" | indent
+    echo "Output" | indent
+    echo $version_output
+    exit 1
+  fi
+  echo $version_output
 
   cache_build_artifacts_for_future_deploys
 else
