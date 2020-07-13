@@ -3,6 +3,14 @@ heroku-buildpack-statsite
 
 A [Heroku buildpack](http://devcenter.heroku.com/articles/buildpacks) for compiling statsite.
 
+It's setup to use (GrafanaCloud)[https://grafana.com/products/cloud/].
+
+You need to have `GRAFANA_API_KEY` for this to work.
+
+```bash
+heroku config:set GRAFANA_API_KEY=foobar
+```
+
 You can set the statsite version via an ENV variable.
 
 ```bash
@@ -22,4 +30,3 @@ After it's been rebuilt you should unset it.
 ```bash
 heroku config:unset FREETDS_REBUILD
 ```
-
