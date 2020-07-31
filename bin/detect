@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Usage:
+#  bin/detect BUILD_DIR
+#  return an exit code of 0 if the app present at BUILD_DIR can be serviced by this buildpack.
+#
+# If 'detect' exits with status code 0:
+#   stdout is inserted in "-----> <X> app detected" and 'compile' script is run
+# If 'detect' exits with status code != 0:
+#   the buildpack is not used
+#
+# More information here: https://devcenter.heroku.com/articles/buildpack-api
+
+echo "StatSite"
+exit 0

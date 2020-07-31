@@ -1,0 +1,284 @@
+#!/bin/bash
+#
+# Usage:
+#  bin/compile BUILD_DIR CACHE_DIR ENV_DIR
+# Example
+#   BUILD_DIR is /tmp/build_5b72bfcaef1adfe4bb7a9e34d80201fc
+#   CACHE_DIR is  app
+#  The contents of CACHE_DIR will be persisted between builds.
+
+set -e
+
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+VENDOR_DIR="$BUILD_DIR/vendor"
+STATSITE_SOURCE_DIR="$CACHE_DIR/source/statsite"
+STATSITE_INSTALL_DIR="$VENDOR_DIR/statsite"
+
+unset GIT_DIR
+
+logstamp() { printf "[%s]" "$(TZ='America/Chicago' date +'%Y-%m-%d %H:%M:%S')" ; }
+topic()    { echo "-----> $(logstamp) $*" ; }
+info()    { echo "       $*" ; }
+indent()  { sed -u 's/^/       /' ; }
+
+BUILDPACK_DIR=$(cd "$(dirname "$0")"; cd ..; pwd)
+
+APT_DIR="$CACHE_DIR/.apt"
+APT_CACHE_DIR="$CACHE_DIR/apt/cache"
+APT_STATE_DIR="$CACHE_DIR/apt/state"
+
+APT_SOURCELIST_DIR="$CACHE_DIR/apt/sources"
+APT_SOURCES="$APT_SOURCELIST_DIR/sources.list"
+
+APT_OPTIONS="-o debug::nolocking=true -o dir::cache=$APT_CACHE_DIR -o dir::state=$APT_STATE_DIR"
+# Override the use of /etc/apt/sources.list (sourcelist) and /etc/apt/sources.list.d/* (sourceparts).
+APT_OPTIONS="$APT_OPTIONS -o dir::etc::sourcelist=$APT_SOURCES -o dir::etc::sourceparts=/dev/null -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true"
+
+mkdir -p "$APT_DIR"
+mkdir -p "$APT_CACHE_DIR/archives/partial"
+mkdir -p "$APT_STATE_DIR/lists/partial"
+mkdir -p "$APT_SOURCELIST_DIR"
+
+load_env_vars() {
+  local env_var; env_var="${1:-}"
+  until [ -z "$env_var" ]; do [ -f "$ENV_DIR/$env_var" ] && export "$env_var=$(cat "$ENV_DIR/$env_var")"; shift ; env_var="${1:-}" ; done
+}
+load_env_vars "STATSITE_VERSION" "STATSITE_REBUILD" "GRAFANA_API_KEY"
+
+STATSITE_VERSION="${STATSITE_VERSION:-master}"
+
+CACHED_TAR="$CACHE_DIR/statsite-$STATSITE_VERSION-heroku.tar.bz2"
+if [ "${STATSITE_REBUILD:-false}" = "true" ]; then
+  rm -f "$CACHED_TAR"
+fi
+
+BUILD_TARGET_DIR="$BUILD_DIR/statsite"
+
+install_deps() {
+  cat "/etc/apt/sources.list" > "$APT_SOURCES"
+
+  echo "deb https://packagecloud.io/raintank/raintank/ubuntu/ trusty main" >> $APT_SOURCES
+  echo "deb-src https://packagecloud.io/raintank/raintank/ubuntu/ trusty main" >> $APT_SOURCES
+
+  # Install dependencies
+  topic "Updating apt caches for dependencies"
+  apt-get $APT_OPTIONS update | indent
+
+  topic "Installing dependencies"
+  DEPS="build-essential libtool autoconf automake scons python-setuptools lsof git texlive check curl gnupg apt-transport-https carbon-relay-ng"
+  apt-get $APT_OPTIONS -y --force-yes -d install --reinstall $DEPS | indent
+
+  mkdir -p $BUILD_DIR/.apt
+
+  for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
+    topic "Installing $(basename $DEB)"
+    dpkg -x $DEB $BUILD_DIR/.apt/
+  done
+
+  topic "Rewrite package-config files"
+  find $BUILD_DIR/.apt -type f -ipath '*/pkgconfig/*.pc' | xargs --no-run-if-empty -n 1 sed -i -e 's!^prefix=\(.*\)$!prefix='"$BUILD_DIR"'/.apt\1!g'
+}
+
+configure_app_env_vars() {
+  topic "Creating .profile.d entry"
+  mkdir -p "$BUILD_DIR/.profile.d"
+
+  cat <<EOF > "$BUILD_DIR/.profile.d/statsite.sh"
+  export PATH="\$HOME/.apt/usr/bin:\$HOME/vendor/statsite/bin:\$PATH"
+  export LD_LIBRARY_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu:\$HOME/.apt/usr/lib/i386-linux-gnu:\$HOME/.apt/usr/lib:\$LD_LIBRARY_PATH"
+  export LIBRARY_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu:\$HOME/.apt/usr/lib/i386-linux-gnu:\$HOME/.apt/usr/lib:\$LIBRARY_PATH"
+  export INCLUDE_PATH="\$HOME/.apt/usr/include:\$HOME/.apt/usr/include/x86_64-linux-gnu:\$INCLUDE_PATH"
+  export CPATH="\$INCLUDE_PATH"
+  export CPPPATH="\$INCLUDE_PATH"
+  export PKG_CONFIG_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/i386-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/pkgconfig:\$PKG_CONFIG_PATH"
+EOF
+
+  chmod +x "$BUILD_DIR/.profile.d/statsite.sh"
+  echo "configured APP env vars:" | indent
+   indent < "$BUILD_DIR/.profile.d/statsite.sh"
+  . "$BUILD_DIR/.profile.d/statsite.sh"
+
+  #give environment to later buildpacks
+  export | grep -E -e ' (PATH|LD_LIBRARY_PATH|LIBRARY_PATH|INCLUDE_PATH|CPATH|CPPPATH|PKG_CONFIG_PATH)='  > "$BUILDPACK_DIR/export"
+}
+
+download_and_extract_statsite_archive() {
+  STATSITE_URL="https://github.com/statsite/statsite.git"
+
+  mkdir -p "$STATSITE_SOURCE_DIR"
+  if [ -f "$STATSITE_SOURCE_DIR/.git/config" ]; then
+    pushd "$STATSITE_SOURCE_DIR"
+    git fetch --all
+  else
+    git clone "$STATSITE_URL" "$STATSITE_SOURCE_DIR"
+    pushd "$STATSITE_SOURCE_DIR"
+  fi
+
+  git reset --hard "$STATSITE_VERSION"
+  popd
+}
+
+build_and_install_statsite() {
+  topic "Building StatSite"
+
+  cd "$STATSITE_SOURCE_DIR"
+
+  ./autogen.sh
+  ./configure --prefix="$STATSITE_INSTALL_DIR"
+
+  make -j2
+
+  mkdir -p "$STATSITE_INSTALL_DIR/bin"
+  mkdir -p "$STATSITE_INSTALL_DIR/etc"
+
+  cp "$STATSITE_SOURCE_DIR/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
+  cp -r "$STATSITE_SOURCE_DIR/sinks" "$STATSITE_INSTALL_DIR/sinks"
+}
+
+configure_carbon_relay() {
+  cat <<EOF > "$STATSITE_INSTALL_DIR/etc/carbon-relay-ng.conf"
+  ## Global settings ##
+  # instance id's distinguish stats of multiple relays.
+  # do not run multiple relays with the same instance id.
+  # supported variables:
+  #  \${HOST} : hostname
+  instance = "\${HOST}"
+
+  ## System ##
+  # this setting can be used to override the default GOMAXPROCS logic
+  # it is ignored if the GOMAXPROCS environment variable is set
+  max_procs = 2
+  pid_file = "carbon-relay-ng.pid"
+  # directory for spool files
+  spool_dir = "spool"
+
+  ## Logging ##
+  # one of trace debug info warn error fatal panic
+  # see docs/logging.md for level descriptions
+  # note: if you used to use "notice", you should now use "info".
+  log_level = "info"
+
+  ## Inputs ##
+  ### plaintext Carbon ###
+  listen_addr = "0.0.0.0:2003"
+  # close inbound plaintext connections if they've been idle for this long ("0s" to disable)
+  plain_read_timeout = "2m"
+  ### Pickle Carbon ###
+  pickle_addr = "0.0.0.0:2013"
+  # close inbound pickle connections if they've been idle for this long ("0s" to disable)
+  pickle_read_timeout = "2m"
+
+  ## Validation of inputs ##
+  # you can also validate that each series has increasing timestamps
+  validate_order = false
+
+  # How long to keep track of invalid metrics seen
+  # Useful time units are "s", "m", "h"
+  bad_metrics_max_age = "24h"
+
+  [[route]]
+  key = 'grafanaNet'
+  type = 'grafanaNet'
+  addr = 'https://graphite-us-central1.grafana.net/metrics'
+  apikey = '11771:$GRAFANA_API_KEY'
+  schemasFile = '/app/vendor/statsite/etc/storage-schemas.conf'
+
+  ## Instrumentation ##
+  [instrumentation]
+  # in addition to serving internal metrics via expvar, you can send them to graphite/carbon
+  # IMPORTANT: setting this to "" will disable flushing, and metrics will pile up and lead to OOM
+  # see https://github.com/graphite-ng/carbon-relay-ng/issues/50
+  # so for now you MUST send them somewhere. sorry.
+  # (Also, the interval here must correspond to your setting in storage-schemas.conf if you use Grafana Cloud)
+  graphite_addr = "localhost:2003"
+  graphite_interval = 10000  # in ms
+EOF
+
+  cat <<EOF > "$STATSITE_INSTALL_DIR/etc/storage-schemas.conf"
+[default]
+  pattern = .*
+  retentions = 10s:1d
+EOF
+}
+
+
+configure_statsite() {
+  cat <<EOF > "$STATSITE_INSTALL_DIR/etc/statsite.conf"
+[statsite]
+port = 8125
+udp_port = 8125
+log_level = INFO
+log_facility = local0
+flush_interval = 10
+timer_eps = 0.01
+set_eps = 0.02
+stream_cmd = python ~/vendor/statsite/sinks/graphite.py localhost 2003 statsite
+
+[histogram_api]
+prefix=api
+min=0
+max=100
+width=5
+
+[histogram_default]
+prefix=
+min=0
+max=200
+width=20
+EOF
+}
+
+
+cache_build_artifacts_for_future_deploys() {
+  topic "Caching StatSite installation"
+  pushd "$STATSITE_INSTALL_DIR"
+  tar cjf "$CACHED_TAR" . | indent
+  popd
+}
+
+install_deps
+
+topic "StatSite $STATSITE_VERSION building in $BUILD_DIR"
+
+configure_app_env_vars
+
+if [ ! -f "$CACHED_TAR" ]; then
+  info "Cached files not found - downloading and unpacking..."
+  download_and_extract_statsite_archive
+
+  build_and_install_statsite
+
+  configure_statsite
+  configure_carbon_relay
+
+  topic 'Checking StatSite CLI'
+  version_output=$(statsite -v 2>&1)
+  if [[ ! $version_output  =~ "statsite version "[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    topic "StatStat version output didn't match expected format"
+    echo "Expected pattern: /statsite version [0-9]+\.[0-9]+\.[0-9]+/" | indent
+    echo "Output" | indent
+    echo $version_output
+    exit 1
+  fi
+  echo $version_output
+
+  topic 'Checking Carbon Relay NG CLI'
+  version_output=$(carbon-relay-ng version 2>&1)
+  if [[ ! $version_output  =~ "carbon-relay-ng "[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    topic "StatStat version output didn't match expcted format"
+    echo "expected regex format: /carbon-relay-ng version [0-9]+\.[0-9]+\.[0-9]+/" | indent
+    echo "Output" | indent
+    echo $version_output
+    exit 1
+  fi
+  echo $version_output
+
+  cache_build_artifacts_for_future_deploys
+else
+  info "Unpacking cached files..."
+  tar xjf "$CACHED_TAR" -C "$STATSITE_INSTALL_DIR" | indent
+fi
+
+info "Install of StatSite $STATSITE_VERSION complete"
