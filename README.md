@@ -28,5 +28,5 @@ heroku config:set STATSITE_REBUILD=true
 After it's been rebuilt you should unset it.
 
 ```bash
-heroku config:unset FREETDS_REBUILD
+heroku config:unset STATSITE_REBUILD
 ```
