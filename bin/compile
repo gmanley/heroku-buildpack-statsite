@@ -133,8 +133,8 @@ build_and_install_statsite() {
   mkdir -p "$STATSITE_INSTALL_DIR/bin"
   mkdir -p "$STATSITE_INSTALL_DIR/etc"
 
-  cp "$STATSITE_SOURCE_DIR/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
-  cp -r "$STATSITE_SOURCE_DIR/sinks" "$STATSITE_INSTALL_DIR/sinks"
+  cp -v "$STATSITE_SOURCE_DIR/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
+  cp -rv "$STATSITE_SOURCE_DIR/sinks" "$STATSITE_INSTALL_DIR/sinks"
 }
 
 configure_carbon_relay() {
@@ -262,6 +262,8 @@ if [ ! -f "$CACHED_TAR" ]; then
     echo "Expected pattern: /statsite version [0-9]+\.[0-9]+\.[0-9]+/" | indent
     echo "Output" | indent
     echo $version_output
+    ls -alhR /
+    echo $PATH
     exit 1
   fi
   echo $version_output
