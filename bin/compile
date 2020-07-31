@@ -50,7 +50,8 @@ load_env_vars "STATSITE_VERSION" "STATSITE_REBUILD" "GRAFANA_API_KEY"
 STATSITE_VERSION="${STATSITE_VERSION:-master}"
 
 CACHED_TAR="$CACHE_DIR/statsite-$STATSITE_VERSION-heroku.tar.bz2"
-if [ "${STATSITE_REBUILD:-false}" = "true" ]; then
+# Default to rebuilding each time, until caching setup is fixed
+if [ "${STATSITE_REBUILD:-true}" = "true" ]; then
   rm -f "$CACHED_TAR"
 fi
 
@@ -85,6 +86,7 @@ configure_app_env_vars() {
   topic "Creating .profile.d entry"
   mkdir -p "$BUILD_DIR/.profile.d"
 
+  # This is run at the start of the dyno
   cat <<EOF > "$BUILD_DIR/.profile.d/statsite.sh"
   export PATH="\$HOME/.apt/usr/bin:\$HOME/vendor/statsite/bin:\$PATH"
   export LD_LIBRARY_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu:\$HOME/.apt/usr/lib/i386-linux-gnu:\$HOME/.apt/usr/lib:\$LD_LIBRARY_PATH"
@@ -95,6 +97,7 @@ configure_app_env_vars() {
   export PKG_CONFIG_PATH="\$HOME/.apt/usr/lib/x86_64-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/i386-linux-gnu/pkgconfig:\$HOME/.apt/usr/lib/pkgconfig:\$PKG_CONFIG_PATH"
 EOF
 
+  # These are only set for the buildpack install enviroment.
   export PATH="$BUILD_DIR/.apt/usr/bin:$BUILD_DIR/vendor/statsite/bin:$PATH"
   export LD_LIBRARY_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.apt/usr/lib:$LD_LIBRARY_PATH"
   export LIBRARY_PATH="$BUILD_DIR/.apt/usr/lib/x86_64-linux-gnu:$BUILD_DIR/.apt/usr/lib/i386-linux-gnu:$BUILD_DIR/.apt/usr/lib:$LIBRARY_PATH"
@@ -140,6 +143,8 @@ build_and_install_statsite() {
   mkdir -p "$STATSITE_INSTALL_DIR/bin"
   mkdir -p "$STATSITE_INSTALL_DIR/etc"
 
+  # Unfortunately we can't run make install as statsite doesn't respect --prefix and still tries to
+  # install some things into the root directories, causing a permission error.
   cp -v "$STATSITE_SOURCE_DIR/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
   cp -rv "$STATSITE_SOURCE_DIR/sinks" "$STATSITE_INSTALL_DIR/sinks"
 }
