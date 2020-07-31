@@ -262,8 +262,8 @@ if [ ! -f "$CACHED_TAR" ]; then
     echo "Expected pattern: /statsite version [0-9]+\.[0-9]+\.[0-9]+/" | indent
     echo "Output" | indent
     echo $version_output
-    ls -alhR /
     echo $PATH
+    ls -alhR /app /tmp
     exit 1
   fi
   echo $version_output
