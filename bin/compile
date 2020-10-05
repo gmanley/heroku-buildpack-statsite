@@ -147,6 +147,9 @@ build_and_install_statsite() {
   # install some things into the root directories, causing a permission error.
   cp -v "$STATSITE_SOURCE_DIR/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
   cp -rv "$STATSITE_SOURCE_DIR/sinks" "$STATSITE_INSTALL_DIR/sinks"
+
+  # Shouldn't need source anymore, doing this to reduce slugsize
+  rm -rf "$STATSITE_SOURCE_DIR"
 }
 
 configure_carbon_relay() {
@@ -227,6 +230,8 @@ flush_interval = 10
 timer_eps = 0.01
 set_eps = 0.02
 stream_cmd = python ~/vendor/statsite/sinks/graphite.py localhost 2003 statsite
+extended_counters = true
+legacy_extended_counters = false
 
 [histogram_api]
 prefix=api
@@ -289,7 +294,8 @@ if [ ! -f "$CACHED_TAR" ]; then
   fi
   echo $version_output
 
-  cache_build_artifacts_for_future_deploys
+  # Commented out until caching is implemented.
+  # cache_build_artifacts_for_future_deploys
 else
   info "Unpacking cached files..."
   tar xjf "$CACHED_TAR" -C "$STATSITE_INSTALL_DIR" | indent
