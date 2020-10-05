@@ -78,6 +78,9 @@ install_deps() {
     dpkg -x $DEB $BUILD_DIR/.apt/
   done
 
+  # Reduce slug size further by deleting APT cache. This should be removed once caching is fixed.
+  rm -rf "$APT_CACHE_DIR"
+
   topic "Rewrite package-config files"
   find $BUILD_DIR/.apt -type f -ipath '*/pkgconfig/*.pc' | xargs --no-run-if-empty -n 1 sed -i -e 's!^prefix=\(.*\)$!prefix='"$BUILD_DIR"'/.apt\1!g'
 }
