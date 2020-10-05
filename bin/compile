@@ -230,8 +230,6 @@ flush_interval = 10
 timer_eps = 0.01
 set_eps = 0.02
 stream_cmd = python ~/vendor/statsite/sinks/graphite.py localhost 2003 statsite
-extended_counters = true
-legacy_extended_counters = false
 
 [histogram_api]
 prefix=api
