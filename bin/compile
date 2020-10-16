@@ -68,7 +68,7 @@ install_deps() {
   apt-get $APT_OPTIONS update | indent
 
   topic "Installing dependencies"
-  DEPS="build-essential libtool autoconf automake scons python-setuptools lsof git texlive check curl gnupg apt-transport-https carbon-relay-ng"
+  DEPS="carbon-relay-ng"
   apt-get $APT_OPTIONS -y --force-yes -d install --reinstall $DEPS | indent
 
   mkdir -p $BUILD_DIR/.apt
@@ -118,41 +118,10 @@ EOF
 }
 
 download_and_extract_statsite_archive() {
-  STATSITE_URL="https://github.com/statsite/statsite.git"
+  STATSITE_URL="https://github.com/gmanley/heroku-buildpack-statsite/releases/download/0.1/statsite.tar.gz"
 
-  mkdir -p "$STATSITE_SOURCE_DIR"
-  if [ -f "$STATSITE_SOURCE_DIR/.git/config" ]; then
-    pushd "$STATSITE_SOURCE_DIR"
-    git fetch --all
-  else
-    git clone "$STATSITE_URL" "$STATSITE_SOURCE_DIR"
-    pushd "$STATSITE_SOURCE_DIR"
-  fi
-
-  git reset --hard "$STATSITE_VERSION"
-  popd
-}
-
-build_and_install_statsite() {
-  topic "Building StatSite"
-
-  cd "$STATSITE_SOURCE_DIR"
-
-  ./autogen.sh
-  ./configure --prefix="$STATSITE_INSTALL_DIR"
-
-  make -j2
-
-  mkdir -p "$STATSITE_INSTALL_DIR/bin"
-  mkdir -p "$STATSITE_INSTALL_DIR/etc"
-
-  # Unfortunately we can't run make install as statsite doesn't respect --prefix and still tries to
-  # install some things into the root directories, causing a permission error.
-  cp -v "$STATSITE_SOURCE_DIR/statsite" "$STATSITE_INSTALL_DIR/bin/statsite"
-  cp -rv "$STATSITE_SOURCE_DIR/sinks" "$STATSITE_INSTALL_DIR/sinks"
-
-  # Shouldn't need source anymore, doing this to reduce slugsize
-  rm -rf "$STATSITE_SOURCE_DIR"
+  curl -o "$BUILD_DIR" "$STATSITE_URL"
+  tar -xvf $STATSITE_SOURCE_DIR -C %STATSITE_INSTALL_DIR
 }
 
 configure_carbon_relay() {
@@ -265,8 +234,6 @@ configure_app_env_vars
 if [ ! -f "$CACHED_TAR" ]; then
   info "Cached files not found - downloading and unpacking..."
   download_and_extract_statsite_archive
-
-  build_and_install_statsite
 
   configure_statsite
   configure_carbon_relay
