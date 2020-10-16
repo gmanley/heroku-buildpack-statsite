@@ -120,8 +120,8 @@ EOF
 download_and_extract_statsite_archive() {
   STATSITE_URL="https://github.com/gmanley/heroku-buildpack-statsite/releases/download/0.1/statsite.tar.gz"
 
-  curl -o "$BUILD_DIR/statsite.tar.gz" "$STATSITE_URL"
-  tar -Lxvf "$BUILD_DIR/statsite.tar.gz" -C $STATSITE_INSTALL_DIR
+  curl -Lo "$BUILD_DIR/statsite.tar.gz" "$STATSITE_URL"
+  tar -xzvf "$BUILD_DIR/statsite.tar.gz" -C $STATSITE_INSTALL_DIR
 }
 
 configure_carbon_relay() {
