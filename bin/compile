@@ -126,7 +126,6 @@ download_and_extract_statsite_archive() {
 }
 
 configure_carbon_relay() {
-  mkdir -p "$STATSITE_INSTALL_DIR/etc"
   cat <<EOF > "$STATSITE_INSTALL_DIR/etc/carbon-relay-ng.conf"
   ## Global settings ##
   # instance id's distinguish stats of multiple relays.
@@ -194,6 +193,7 @@ EOF
 
 
 configure_statsite() {
+  mkdir -p "$STATSITE_INSTALL_DIR/etc"
   cat <<EOF > "$STATSITE_INSTALL_DIR/etc/statsite.conf"
 [statsite]
 port = 8125
